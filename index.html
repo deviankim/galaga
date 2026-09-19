@@ -1,79 +1,47 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#03050c">
-<title>GALAGA // WEB</title>
-<style>
-:root{color-scheme:dark;--cyan:#74f7ff;--pink:#ff4f86;--yellow:#ffe66d}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#02030a;color:#fff;font-family:"Courier New",monospace}
-body{display:grid;place-items:center}.game{position:relative;width:min(100vw,620px);height:100dvh;max-height:960px;overflow:hidden;background:radial-gradient(circle at 50% 18%,#12275b 0,#07102a 30%,#02030a 75%);border-inline:1px solid #16214c}
-canvas{display:block;width:100%;height:100%;touch-action:none}.hud{position:absolute;inset:0;pointer-events:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;font-weight:700;letter-spacing:.08em;text-shadow:0 0 10px currentColor}
-.hud small{display:block;color:var(--cyan);font-size:10px}.hud .r{text-align:right}.wave{position:absolute;top:17px;left:50%;transform:translateX(-50%);font-size:11px;color:#93a8df;letter-spacing:.18em;pointer-events:none}
-.scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 4px)}
-.touch{position:absolute;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));display:none;justify-content:space-between;padding:0 18px;pointer-events:none}.touch div{display:flex;gap:10px}
-.touch button{pointer-events:auto;width:68px;height:68px;border-radius:50%;border:1px solid #5476db;background:#101a3ccc;color:#fff;font:700 24px monospace;box-shadow:inset 0 0 18px #2949a6,0 0 16px #071335;backdrop-filter:blur(4px)}
-.touch .fire{border-color:#d04670;box-shadow:inset 0 0 18px #9d214c,0 0 16px #3a0c20;font-size:13px;letter-spacing:.08em}
-@media(pointer:coarse),(max-width:720px){.touch{display:flex}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="픽셀 아케이드 슈팅. 순차 편대 진입, 트랙터 빔 포획과 구출, 듀얼 파이터를 브라우저에서 플레이하세요.">
+  <title>GALAGA · PIXEL ARCADE</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css?v=2">
 </head>
 <body>
-<main class="game">
-<canvas id="c" aria-label="Galaga style web game"></canvas>
-<div class="hud"><div><small>SCORE</small><span id="score">000000</span></div><div class="r"><small>HI-SCORE</small><span id="hi">000000</span></div></div>
-<div class="wave" id="wave">WAVE 01</div>
-<div class="touch"><div><button id="left" aria-label="왼쪽">◀</button><button id="right" aria-label="오른쪽">▶</button></div><button class="fire" id="fire" aria-label="발사">FIRE</button></div>
-<div class="scan"></div>
-</main>
-<script>
-(()=>{
-const c=document.querySelector('#c'),x=c.getContext('2d'),scoreEl=document.querySelector('#score'),hiEl=document.querySelector('#hi'),waveEl=document.querySelector('#wave');
-let W=480,H=800,D=1;
-function resize(){const r=c.getBoundingClientRect();D=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;c.width=Math.round(W*D);c.height=Math.round(H*D);x.setTransform(D,0,0,D,0,0)}
-addEventListener('resize',resize);resize();
-const TAU=Math.PI*2,R=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const key={l:false,r:false,f:false};let shots=[],enemyShots=[],enemies=[],parts=[];
-let state='title',score=0,hi=+(localStorage.galagaHi||0),wave=1,t=0,formation=0,diveTimer=2,shake=0;
-hiEl.textContent=String(hi).padStart(6,'0');
-const ship={x:W/2,y:H-86,lives:3,cool:0,alive:true,inv:0,speed:300};
-const stars=Array.from({length:130},()=>({x:Math.random(),y:Math.random(),z:R(.35,1.4),p:R(0,TAU)}));
-let ac=null;
-function beep(f=440,d=.05,type='square',v=.025){try{ac||=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
-function addScore(n){score+=n;scoreEl.textContent=String(score).padStart(6,'0');if(score>hi){hi=score;localStorage.galagaHi=hi;hiEl.textContent=String(hi).padStart(6,'0')}}
-function burst(px,py,col='#74f7ff',n=16){for(let i=0;i<n;i++){const a=R(0,TAU),s=R(50,210);parts.push({x:px,y:py,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:R(.25,.7),m:.7,col,size:R(1,4)})}shake=Math.max(shake,6)}
-function spawnWave(){enemies=[];shots=[];enemyShots=[];const cols=8,rows=4,gap=Math.min(52,W/9),sx=W/2-(cols-1)*gap/2;for(let r=0;r<rows;r++)for(let q=0;q<cols;q++){let type=r===0?'boss':r===1?'bee':'grunt';enemies.push({homeX:sx+q*gap,homeY:145+r*48,x:sx+q*gap,y:-R(60,500),type,hp:type==='boss'?2:1,r:15,row:r,col:q,mode:'enter',enter:R(-1.4,0),phase:R(0,TAU),dead:false})}waveEl.textContent='WAVE '+String(wave).padStart(2,'0');formation=0;diveTimer=2}
-function start(){score=0;wave=1;ship.lives=3;ship.alive=true;ship.inv=1.6;ship.x=W/2;parts=[];spawnWave();state='play';scoreEl.textContent='000000';beep(220,.08)}
-function fire(){if(state!=='play'){if(state==='title'||state==='over')start();return}if(!ship.alive||ship.cool>0)return;ship.cool=.16;shots.push({x:ship.x,y:ship.y-20,vy:-580,dead:false});beep(800,.04)}
-function hitShip(){if(ship.inv>0||!ship.alive)return;ship.alive=false;ship.lives--;burst(ship.x,ship.y,'#ffe66d',30);beep(95,.3,'sawtooth',.055);setTimeout(()=>{if(ship.lives<=0)state='over';else{ship.alive=true;ship.inv=2;ship.x=W/2}},800)}
-function col(e){return e.type==='boss'?'#ff4f86':e.type==='bee'?'#ffe66d':'#74f7ff'}
-function enemyDraw(e){const C=col(e),fl=Math.sin(t*10+e.phase)*3;x.save();x.translate(e.x,e.y);x.strokeStyle=C;x.fillStyle=C;x.lineWidth=2;x.shadowBlur=12;x.shadowColor=C;if(e.type==='boss'){x.beginPath();x.moveTo(-16,7);x.lineTo(-8,-8);x.lineTo(0,-14);x.lineTo(8,-8);x.lineTo(16,7);x.lineTo(7,3);x.lineTo(0,11);x.lineTo(-7,3);x.closePath();x.stroke();x.fillRect(-3,-4,6,7);x.beginPath();x.moveTo(-9,3);x.lineTo(-18,11+fl);x.moveTo(9,3);x.lineTo(18,11-fl);x.stroke()}else if(e.type==='bee'){x.beginPath();x.moveTo(0,-12);x.lineTo(8,-3);x.lineTo(5,10);x.lineTo(0,5);x.lineTo(-5,10);x.lineTo(-8,-3);x.closePath();x.stroke();x.beginPath();x.moveTo(-6,-1);x.lineTo(-16,6+fl);x.moveTo(6,-1);x.lineTo(16,6-fl);x.stroke();x.fillRect(-2,-6,4,4)}else{x.beginPath();x.moveTo(0,-11);x.lineTo(7,-2);x.lineTo(13,1);x.lineTo(7,5);x.lineTo(4,12);x.lineTo(0,7);x.lineTo(-4,12);x.lineTo(-7,5);x.lineTo(-13,1);x.lineTo(-7,-2);x.closePath();x.stroke();x.fillRect(-2,-3,4,5)}x.restore()}
-function shipDraw(){if(!ship.alive||(ship.inv>0&&Math.floor(t*12)%2===0))return;x.save();x.translate(ship.x,ship.y);x.shadowBlur=15;x.shadowColor='#74f7ff';x.fillStyle='#edffff';x.fillRect(-3,-16,6,16);x.fillStyle='#74f7ff';x.beginPath();x.moveTo(0,-14);x.lineTo(8,6);x.lineTo(18,12);x.lineTo(9,14);x.lineTo(0,7);x.lineTo(-9,14);x.lineTo(-18,12);x.lineTo(-8,6);x.closePath();x.fill();x.fillStyle='#ff4f86';x.fillRect(-2,-7,4,8);x.fillStyle='#ffe66d';x.fillRect(-5,13,3,7);x.fillRect(2,13,3,7);x.restore()}
-const hit=(ax,ay,ar,bx,by,br)=>{let dx=ax-bx,dy=ay-by;return dx*dx+dy*dy<(ar+br)*(ar+br)};
-function update(dt){t+=dt;shake*=Math.pow(.02,dt);stars.forEach(s=>{s.y+=dt*s.z*(state==='play'?.09:.025);if(s.y>1){s.y=0;s.x=Math.random()}});parts.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=80*dt;p.life-=dt});parts=parts.filter(p=>p.life>0);if(state!=='play')return;
-ship.cool=Math.max(0,ship.cool-dt);ship.inv=Math.max(0,ship.inv-dt);let d=(key.l?-1:0)+(key.r?1:0);if(ship.alive)ship.x=clamp(ship.x+d*ship.speed*dt,24,W-24);if(key.f)fire();formation+=dt;diveTimer-=dt;
-if(diveTimer<0){let pool=enemies.filter(e=>!e.dead&&e.mode==='formation');if(pool.length){let e=pool[(Math.random()*pool.length)|0];e.mode='dive';e.et=0;e.sx=e.x;e.sy=e.y;diveTimer=Math.max(.65,2.15-wave*.08)+R(0,.8)}}
-for(const e of enemies){e.phase+=dt*2;if(e.mode==='enter'){e.enter+=dt;let p=clamp((e.enter+1.2)/1.2,0,1),q=1-Math.pow(1-p,3);e.y=-40*(1-q)+e.homeY*q;e.x=e.homeX+Math.sin(p*TAU+e.col)*34*(1-p);if(p>=1)e.mode='formation'}else if(e.mode==='formation'){e.x=e.homeX+Math.sin(formation*1.15)*Math.min(25,W*.05);e.y=e.homeY+Math.sin(formation*1.8+e.col*.4)*3;if(Math.random()<dt*(.012+wave*.002))enemyShots.push({x:e.x,y:e.y+12,vx:R(-25,25),vy:190+wave*8,dead:false})}else if(e.mode==='dive'){e.et+=dt;e.x=e.sx+Math.sin(e.et*2.5+e.col)*Math.min(170,W*.36);e.y=e.sy+e.et*(145+wave*5)+Math.sin(e.et*3)*24;if(Math.random()<dt*.36)enemyShots.push({x:e.x,y:e.y+8,vx:(ship.x-e.x)*.12,vy:205+wave*8,dead:false});if(e.y>H+40){e.mode='return';e.y=-30}}else if(e.mode==='return'){let dx=e.homeX-e.x,dy=e.homeY-e.y,ds=Math.hypot(dx,dy);if(ds<7)e.mode='formation';else{e.x+=dx/ds*230*dt;e.y+=dy/ds*230*dt}}if(ship.alive&&hit(e.x,e.y,e.r,ship.x,ship.y,13))hitShip()}
-shots.forEach(s=>s.y+=s.vy*dt);enemyShots.forEach(s=>{s.x+=s.vx*dt;s.y+=s.vy*dt;if(ship.alive&&hit(s.x,s.y,3,ship.x,ship.y,12)){s.dead=true;hitShip()}});
-for(const s of shots)for(const e of enemies){if(!s.dead&&!e.dead&&hit(s.x,s.y,3,e.x,e.y,e.r)){s.dead=true;e.hp--;burst(e.x,e.y,col(e),e.hp<=0?18:7);if(e.hp<=0){e.dead=true;addScore(e.type==='boss'?400:e.type==='bee'?180:100);beep(180,.09,'square',.035)}else beep(360,.05)}}
-shots=shots.filter(s=>!s.dead&&s.y>-20);enemyShots=enemyShots.filter(s=>!s.dead&&s.y<H+20);enemies=enemies.filter(e=>!e.dead);
-if(enemies.length===0){wave++;state='clear';setTimeout(()=>{if(state==='clear'){spawnWave();state='play'}},850)}
-}
-function textCenter(a,y,size=24,color='#fff'){x.fillStyle=color;x.font='700 '+size+'px "Courier New",monospace';x.textAlign='center';x.shadowBlur=12;x.shadowColor=color;x.fillText(a,W/2,y);x.shadowBlur=0}
-function draw(){x.clearRect(0,0,W,H);x.save();x.translate(R(-shake,shake),R(-shake,shake));for(const s of stars){let a=.35+.55*Math.sin(t*s.z*2+s.p)**2;x.globalAlpha=a;x.fillStyle=s.z>1?'#d9faff':'#718dcc';x.fillRect(s.x*W,s.y*H,s.z>1?2:1,s.z>1?2:1)}x.globalAlpha=1;
-enemyDrawBatch:for(const e of enemies)enemyDraw(e);for(const s of shots){x.fillStyle='#fff';x.shadowBlur=10;x.shadowColor='#74f7ff';x.fillRect(s.x-1,s.y-8,3,12)}for(const s of enemyShots){x.fillStyle='#ff7a9f';x.shadowBlur=9;x.shadowColor='#ff4f86';x.beginPath();x.arc(s.x,s.y,3,0,TAU);x.fill()}x.shadowBlur=0;for(const p of parts){x.globalAlpha=Math.max(0,p.life/p.m);x.fillStyle=p.col;x.fillRect(p.x,p.y,p.size,p.size)}x.globalAlpha=1;shipDraw();x.restore();
-x.fillStyle='#7d91c9';x.font='11px "Courier New"';x.textAlign='left';x.fillText('LIVES '+Math.max(0,ship.lives),16,H-18);
-if(state==='title'){textCenter('GALAGA',H*.39,46,'#74f7ff');textCenter('// WEB',H*.39+42,18,'#ff4f86');textCenter('PRESS SPACE / TAP FIRE',H*.58,14,'#ffe66d');textCenter('← → MOVE   SPACE FIRE',H*.58+32,11,'#91a3d8')}
-if(state==='over'){textCenter('GAME OVER',H*.46,34,'#ff4f86');textCenter('SCORE '+String(score).padStart(6,'0'),H*.46+42,15,'#ffe66d');textCenter('SPACE / FIRE TO RETRY',H*.46+78,12,'#74f7ff')}
-if(state==='clear')textCenter('WAVE CLEAR',H*.48,24,'#ffe66d');
-}
-let last=performance.now();function loop(now){let dt=Math.min(.033,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
-addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='ArrowLeft')key.l=true;if(e.code==='ArrowRight')key.r=true;if(e.code==='Space'){key.f=true;fire()}});
-addEventListener('keyup',e=>{if(e.code==='ArrowLeft')key.l=false;if(e.code==='ArrowRight')key.r=false;if(e.code==='Space')key.f=false});
-function bind(id,k){const b=document.querySelector(id);for(const ev of ['pointerdown'])b.addEventListener(ev,e=>{e.preventDefault();key[k]=true;if(k==='f')fire()});for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,e=>{e.preventDefault();key[k]=false})}
-bind('#left','l');bind('#right','r');bind('#fire','f');
-c.addEventListener('pointerdown',()=>{if(state!=='play')start()});
-})();
-</script>
+  <main class="layout">
+    <section class="machine" aria-label="갤러그 게임">
+      <header><span class="brand">GALAGA <span>ARCADE</span></span><span class="edition">PIXEL / 01</span></header>
+      <div class="screen"><canvas id="game" width="224" height="288" tabindex="0" aria-label="갤러그 게임 화면. 좌우 방향키로 이동, 스페이스로 발사, P로 일시정지.">이 게임은 Canvas와 JavaScript가 필요합니다.</canvas></div>
+      <div class="toolbar">
+        <button id="start" class="start" type="button">START</button>
+        <button id="pause" type="button" aria-label="일시정지" disabled>PAUSE</button>
+        <button id="sound" type="button" aria-pressed="false" aria-label="효과음 끄기">SOUND ON</button>
+      </div>
+      <div class="touch" aria-label="모바일 조작">
+        <div class="movement"><button id="left" type="button" aria-label="왼쪽으로 이동">◀</button><button id="right" type="button" aria-label="오른쪽으로 이동">▶</button></div>
+        <button id="fire" type="button" class="fire" aria-label="발사">FIRE</button>
+      </div>
+      <p id="status" class="status" aria-live="polite">START 또는 Space로 시작하세요.</p>
+    </section>
+    <aside class="guide" aria-label="게임 안내">
+      <p class="eyebrow">THE CAPTURE &amp; RESCUE</p>
+      <h1>한 대를 구하면,<br>두 대가 된다.</h1>
+      <p class="intro">편대가 만들어지기 전에 격추하고,<br>급강하 공격 사이에서 살아남으세요.</p>
+      <div class="instructions">
+        <h2>DUAL FIGHTER</h2>
+        <p><b>01</b> 초록색 보스의 파란 빔 안으로 들어갑니다. 기체가 포획되면 예비 기체로 재출격합니다.</p>
+        <p><b>02</b> 포획 기체를 데리고 <strong>급강하하는 보스</strong>를 격추하세요. 편대에 있을 때 격추하면 바로 합체되지 않습니다.</p>
+        <p><b>03</b> 구출한 기체가 옆에 도킹합니다. 두 발이 나란히 발사되지만 피격 범위도 넓어집니다.</p>
+        <p class="warning">포획된 빨간 기체를 직접 맞히면 잃습니다. 마지막 기체가 포획되어도 게임은 끝납니다.</p>
+      </div>
+      <button id="practice" class="practice" type="button">도킹 연습 <span>↗</span></button>
+      <dl class="keys"><div><dt>MOVE</dt><dd>← → / A D</dd></div><div><dt>FIRE</dt><dd>SPACE / Z</dd></div><div><dt>PAUSE</dt><dd>P / ESC</dd></div><div><dt>SOUND</dt><dd>M</dd></div></dl>
+      <p class="note">224 × 288 픽셀 · 웹 오디오 합성<br>비공식 재구현이며 원본 ROM·음원을 사용하지 않습니다.</p>
+    </aside>
+  </main>
+  <noscript><p>게임을 실행하려면 브라우저에서 JavaScript를 허용해 주세요.</p></noscript>
+  <script type="module" src="./app.js?v=2"></script>
 </body>
 </html>

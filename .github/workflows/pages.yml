@@ -23,14 +23,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test game rules
+        run: node --test tests/*.test.mjs
+      - name: Prepare static site
+        run: |
+          mkdir -p _site
+          cp index.html style.css game.js render.js audio.js app.js _site/
+          touch _site/.nojekyll
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
